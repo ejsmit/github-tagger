@@ -1,3 +1,164 @@
 ' Gambas class file
 
+Public arrProjects As Variant[]
+
+Private vCurrentProject As Collection = Null
+Private sToken As String
+Private sTag As String
+
+
+
+Public Sub Form_Open()
+
+  Dim colProject As Collection
+
+  LoadSettings()
+  
+  For Each colProject In arrProjects
+    lstProjects.Add(colProject["name"])
+  Next
+
+  lstProjects.index = -1
+  
+  gvTags.Columns.Count = 2
+  gvTags.Rows.Count = 0
+  
+End
+
+Public Sub lstProjects_Select()
+
+  btnTag.enabled = False
+  sTag = ""
+  vCurrentProject = arrProjects[lstProjects.index]
+  lblCaption.text = vCurrentProject["name"]
+  
+  FMain.Refresh
+  Wait
+
+  If Not vCurrentProject.Exist("tags")
+    vCurrentProject["tags"] = GitHub.GetReleases(vCurrentProject["source"])
+  End If 
+  DisplayTags(gvTags, vCurrentProject["tags"])
+
+End
+
+
+
+Public Sub btnCancel_Click()
+
+  Quit
+
+End
+
+
+Public Sub gvTags_Select()
+
+  btnTag.enabled = True
+  sTag = gvTags[gvTags.row, 0].text
+
+End
+
+Public Sub btnTag_Click()
+
+  If Message.warning("Do you really want to create<br><b>" & sTag & "<b>", "Yes", "No", "Cancel") == 1 Then
+    
+    GitHub.CreateTag(vCurrentProject["source"], vCurrentProject["destination"], sTag, sToken)
+  
+  End If
+
+End
+
+
+Private Sub DisplayTags(gv As GridView, arrTags As Variant[])
+
+'TODO: add tag create date
+
+  Dim j, k As Integer
+ Dim minW As Integer, maxW As Integer
+ Dim colW As New Integer[2]
+
+ minW = gv.Font.TextWidth("X") * 5
+ maxW = minW * 40
+
+  gv.Clear
+  gv.Rows.count = arrTags.Count
+ gv.Columns.Count = 3
+ gv.header = GridView.Horizontal
+
+ gv.Columns[0].Text = "Tag"
+ gv.Columns[1].Text = "Date"
+ gv.Columns[2].Text = "Description"
+ colW[0] = gv.Font.TextWidth("Tag")
+ colW[1] = gv.Font.TextWidth("Date")
+  
+  For j = 0 To arrTags.Count - 1
+    gv[j, 0].text = arrTags[j]["tag_name"]
+    gv[j, 1].text = arrTags[j]["created_at"]
+    gv[j, 2].text = arrTags[j]["name"]
+    If colW[0] < gv.Font.TextWidth(gv[j, 0].text) Then colW[0] = gv.Font.TextWidth(gv[j, 0].text)
+    If colW[1] < gv.Font.TextWidth(gv[j, 1].text) Then colW[1] = gv.Font.TextWidth(gv[j, 1].text)
+  Next
+
+  gv.Columns[0].W = Max(minW, Min(colW[0], maxW)) + 15
+  gv.Columns[1].W = Max(minW, Min(colW[1], maxW)) + 15
+ 
+  gv.Refresh
+
+End Sub
+
+
+
+
+
+Private Sub LoadSettings()
+
+  Dim colProject As Collection
+
+  Dim hTokenFile As File
+  Dim hConfigFile As File
+  Dim sTokenPath As String
+  Dim sConfigPath As String
+  Dim sConfig As String
+  Dim vConfig As Collection
+  
+
+  sConfigPath = "~/.config/gambas3/github-tagger.json"
+
+  Try hConfigFile = Open sConfigPath For Read
+  If Not Error Then
+    Line Input #hConfigFile, sConfig
+    Close #hConfigFile
+    vConfig = JSON.FromString(sConfig)
+  End If 
+
+  ' create a new config file if one does not already exist
+  If Not sConfig Then
+    arrProjects = New Variant[]
+    colProject = New Collection
+    colProject["name"] = "sample"
+    colProject["source"] = "sample1/sample3"
+    colProject["destination"] = "sample2/sample4"
+    arrProjects.Add(colProject)    
+    vConfig = New Collection
+    vConfig.Add(arrProjects, "projects")
+    vConfig.add("~/.private/github-tagger.token", "tokenpath")
+    sConfig = JSON.ToString(vConfig)
+    Try hConfigFile = Open sConfigPath For Write Create
+    Write #hConfigFile, sConfig
+    Close #hConfigFile
+  Endif
+
+  arrProjects = vConfig["projects"]
+
+  Try hTokenFile = Open vConfig["tokenpath"] For Read
+  If Error Then
+    Message("GitHub Token not found!")
+  Else
+    sToken = hTokenFile.ReadLine()
+    Close #hTokenFile
+  End If 
+
+End
+
+
 

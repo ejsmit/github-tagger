@@ -1,10 +1,11 @@
 # Gambas Project File 3.0
 Title=GitHub Tagger
 Startup=FMain
-Version=0.0.1
+Version=0.0.2
 Component=gb.image
 Component=gb.gui.qt
 Component=gb.form
+Component=gb.settings
 Component=gb.net
 Component=gb.net.curl
 Component=gb.util.web

@@ -1,0 +1,99 @@
+' Gambas module file
+
+Public Function GetReleases(sSource As String, Optional sToken As String) As Variant  
+  Return GetFromGitHub("repos/" & sSource & "/releases", sToken)
+End Function
+
+
+Public Function GetBranchHeadReference(sSource As String, sBranch As String, Optional sToken As String) As Variant
+  Return GetFromGitHub("repos/" & sSource & "/git/ref/heads/" & sBranch, sToken)
+End Function
+
+Public Function CreateTagReference(sDest As String, sTag As String, sSHA As String, Optional sToken As String) As Variant
+  Dim vBody As New Collection
+  vBody.Add(sSHA, "sha")
+  vBody.Add("refs/tags/" & sTag, "ref")
+  Return PostToGitHub("repos/" & sDest & "/git/refs", vBody, sToken)
+End Function
+
+
+Public Sub CreateTag(sSource As String, sDest As String, sTag As String, Optional sToken As String)
+
+  Dim sSHA As String
+  Dim vRef As Variant
+  
+  vRef = GetBranchHeadReference(sDest, "master")
+  sSHA = vRef["object"]["sha"]
+  CreateTagReference(sDest, sTag, sSHA, sToken)
+
+End Sub
+
+
+
+
+
+
+Private Function PostToGitHub(sUrl As String, vData As Variant, Optional sToken As String) As Variant
+  
+  Dim hClient As HttpClient
+  Dim sBuffer As String
+  Dim arrHeaders As New String[]
+  Dim sData As String
+
+  hClient = New HttpClient As "hClient"
+  hClient.URL = "https://api.github.com/" &/ sUrl
+  hClient.Async = False
+  hClient.Timeout = 10
+  arrHeaders.Add("Accept: application/vnd.github.v3+json")
+  If sToken Then arrHeaders.Add("Authorization: token " & sToken)
+  sData = JSON.ToString(vData)
+ 
+  hClient.Post("application/json", sData, arrHeaders)
+  
+
+
+  'Print "Begin"
+  If hClient.Status < 0 Then
+    Return Null
+  Else
+    ' Success - read the data
+    If Lof(hClient) Then sBuffer = Read #hClient, Lof(hClient)
+    'Print sBuffer
+  End If
+
+  Return JSON.FromString(sBuffer)  
+  
+End Function  
+
+
+
+Private Function GetFromGitHub(sUrl As String, Optional sToken As String) As Variant
+  
+  Dim hClient As HttpClient
+  Dim sBuffer As String
+  Dim arrHeaders As New String[]
+
+  hClient = New HttpClient As "hClient"
+  hClient.URL = "https://api.github.com/" &/ sUrl
+  hClient.Async = False
+  hClient.Timeout = 10
+  arrHeaders.Add("Accept: application/vnd.github.v3+json")
+  If sToken Then arrHeaders.Add("Authorization: token " & sToken)
+  
+  hClient.Get(arrHeaders)
+  
+
+  'Print "Begin"
+  If hClient.Status < 0 Then
+    Return Null
+  Else
+    ' Success - read the data
+    If Lof(hClient) Then sBuffer = Read #hClient, Lof(hClient)
+    'Print sBuffer
+  End If
+
+  Return JSON.FromString(sBuffer)  
+  
+End Function  
+  
+  

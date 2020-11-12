@@ -1,5 +1,27 @@
 # Gambas Form File 3.0
 
 { Form Form
-  MoveScaled(0,0,64,64)
+  MoveScaled(0,0,133,60)
+  { lstProjects ListBox
+    MoveScaled(1,1,23,52)
+  }
+  { btnTag Button
+    MoveScaled(25,54,14,5)
+    Enabled = False
+    Text = ("Tag!")
+  }
+  { btnCancel Button
+    MoveScaled(118,54,14,5)
+    Text = ("Quit")
+    Cancel = True
+  }
+  { gvTags GridView
+    MoveScaled(25,6,107,47)
+    Mode = Select.Single
+    ScrollBar = Scroll.Vertical
+  }
+  { lblCaption Label
+    MoveScaled(25,0,65,6)
+    Font = Font["Bold,+7"]
+  }
 }
