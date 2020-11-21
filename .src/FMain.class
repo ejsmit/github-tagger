@@ -3,9 +3,11 @@
 Public arrProjects As Variant[]
 
 Private vCurrentProject As Collection = Null
-Private sToken As String
+Private sGHToken As String
+Private sDHToken As String
 Private sTag As String
 
+Private TagRows As Variant[] = Null
 
 
 Public Sub Form_Open()
@@ -20,25 +22,30 @@ Public Sub Form_Open()
 
   lstProjects.index = -1
   
-  gvTags.Columns.Count = 2
-  gvTags.Rows.Count = 0
-  
 End
 
 Public Sub lstProjects_Select()
 
-  btnTag.enabled = False
   sTag = ""
   vCurrentProject = arrProjects[lstProjects.index]
-  lblCaption.text = vCurrentProject["name"]
+  TagRows = Null  
   
+  btnTag.enabled = False
+  lblCaption.text = vCurrentProject["name"]
+  gvTags.Clear
+  gvTags.Rows.Count = 0
+  btnPurge.Visible = False
+    
   FMain.Refresh
   Wait
 
   If Not vCurrentProject.Exist("tags")
     vCurrentProject["tags"] = GitHub.GetReleases(vCurrentProject["source"])
+    vCurrentProject["dockertags"] = Docker.GetTags(vCurrentProject["docker"])
   End If 
-  DisplayTags(gvTags, vCurrentProject["tags"])
+
+  CalcTagRows(gvTags, vCurrentProject["tags"], vCurrentProject["dockertags"])
+  'CalcDockerPurge()
 
 End
 
@@ -53,61 +60,109 @@ End
 
 Public Sub gvTags_Select()
 
-  btnTag.enabled = True
-  sTag = gvTags[gvTags.row, 0].text
-
+  If TagRows[gvTags.row, 3] Then
+    btnTag.enabled = False
+    sTag = ""
+  Else
+    btnTag.enabled = True
+    sTag = TagRows[gvTags.row, 0]
+  End If
 End
 
 Public Sub btnTag_Click()
 
   If Message.warning("Do you really want to create<br><b>" & sTag & "<b>", "Yes", "No", "Cancel") == 1 Then
-    
-    GitHub.CreateTag(vCurrentProject["source"], vCurrentProject["destination"], sTag, sToken)
+
+    GitHub.CreateTag(vCurrentProject["source"], vCurrentProject["destination"], sTag, sGHToken)
+    Message("Tag created!")
   
   End If
 
 End
 
+Public Sub btnPurge_Click()
 
-Private Sub DisplayTags(gv As GridView, arrTags As Variant[])
+  Message("purging") 
 
-'TODO: add tag create date
+End
 
-  Dim j, k As Integer
+
+Private Sub CalcDockerPurge(arrDockerTags As Variant[], iKeepImages As Integer)
+  
+  Dim i As Integer = 0
+  Dim tag As Collection
+  
+  If arrDockerTags.Count < iKeepImages Then
+    Return
+  Endif
+  
+  For Each tag In arrDockerTags
+    If Tag["name"] = "latest" Then
+      Continue
+    Endif
+    Inc i
+    If i > iKeepImages Then
+      ' mark image to be purged 
+    End If
+  Next
+  
+  
+End
+
+
+
+Private Sub CalcTagRows(gv As GridView, arrTags As Variant[], arrDockerTags As Variant[])
+
+ Dim j As Integer
  Dim minW As Integer, maxW As Integer
  Dim colW As New Integer[2]
+ Dim dTag As Collection
 
  minW = gv.Font.TextWidth("X") * 5
  maxW = minW * 40
 
-  gv.Clear
-  gv.Rows.count = arrTags.Count
  gv.Columns.Count = 3
  gv.header = GridView.Horizontal
-
  gv.Columns[0].Text = "Tag"
  gv.Columns[1].Text = "Date"
  gv.Columns[2].Text = "Description"
  colW[0] = gv.Font.TextWidth("Tag")
  colW[1] = gv.Font.TextWidth("Date")
   
+  TagRows = New String[arrTags.Count, 4]
   For j = 0 To arrTags.Count - 1
-    gv[j, 0].text = arrTags[j]["tag_name"]
-    gv[j, 1].text = arrTags[j]["created_at"]
-    gv[j, 2].text = arrTags[j]["name"]
-    If colW[0] < gv.Font.TextWidth(gv[j, 0].text) Then colW[0] = gv.Font.TextWidth(gv[j, 0].text)
-    If colW[1] < gv.Font.TextWidth(gv[j, 1].text) Then colW[1] = gv.Font.TextWidth(gv[j, 1].text)
+    TagRows[j, 0] = arrTags[j]["tag_name"]
+    TagRows[j, 1] = arrTags[j]["created_at"]
+    TagRows[j, 2] = arrTags[j]["name"]
+    If colW[0] < gv.Font.TextWidth(TagRows[j, 0]) Then colW[0] = gv.Font.TextWidth(TagRows[j, 0])
+    If colW[1] < gv.Font.TextWidth(TagRows[j, 1]) Then colW[1] = gv.Font.TextWidth(TagRows[j, 1])
+    For Each dTag In arrDockerTags
+      If arrTags[j]["tag_name"] = dTag["name"] Then
+        TagRows[j, 3] = dTag["name"]
+        Break
+      Endif
+    Next
   Next
 
   gv.Columns[0].W = Max(minW, Min(colW[0], maxW)) + 15
   gv.Columns[1].W = Max(minW, Min(colW[1], maxW)) + 15
- 
-  gv.Refresh
+
+  gv.Rows.count = arrTags.Count 
+
+  'actual population of the grid is done using the data event
+  'using this newly calculated TagRows array as source
 
 End Sub
 
 
+Public Sub gvTags_Data(Row As Integer, Column As Integer)
 
+  gvTags.Data.Text = TagRows[Row, Column]
+  If TagRows[Row, 3] Then
+    gvTags.Data.Background = &HBFFFBF
+  Endif
+
+End
 
 
 Private Sub LoadSettings()
@@ -116,7 +171,6 @@ Private Sub LoadSettings()
 
   Dim hTokenFile As File
   Dim hConfigFile As File
-  Dim sTokenPath As String
   Dim sConfigPath As String
   Dim sConfig As String
   Dim vConfig As Collection
@@ -124,13 +178,11 @@ Private Sub LoadSettings()
 
   sConfigPath = "~/.config/gambas3/github-tagger.json"
 
-  Try hConfigFile = Open sConfigPath For Read
-  If Not Error Then
-    Line Input #hConfigFile, sConfig
-    Close #hConfigFile
+  sConfig = File.Load(sConfigPath)
+  If sConfig Then
     vConfig = JSON.FromString(sConfig)
-  End If 
-
+  End If
+  
   ' create a new config file if one does not already exist
   If Not sConfig Then
     arrProjects = New Variant[]
@@ -138,10 +190,13 @@ Private Sub LoadSettings()
     colProject["name"] = "sample"
     colProject["source"] = "sample1/sample3"
     colProject["destination"] = "sample2/sample4"
+    colProject["docker"] = "user/repo"
+    colProject["docker-keep"] = 5
     arrProjects.Add(colProject)    
     vConfig = New Collection
     vConfig.Add(arrProjects, "projects")
-    vConfig.add("~/.private/github-tagger.token", "tokenpath")
+    vConfig.add("~/.private/github-tagger-gh.token", "ghtokenpath")
+    vConfig.add("~/.private/github-tagger-dh.token", "dhtokenpath")
     sConfig = JSON.ToString(vConfig)
     Try hConfigFile = Open sConfigPath For Write Create
     Write #hConfigFile, sConfig
@@ -150,15 +205,30 @@ Private Sub LoadSettings()
 
   arrProjects = vConfig["projects"]
 
-  Try hTokenFile = Open vConfig["tokenpath"] For Read
-  If Error Then
+  Try sGHToken = Trim$(File.Load(vConfig["ghtokenpath"]))
+  If Not sGHToken Then
     Message("GitHub Token not found!")
+  Endif
+
+'  Try hTokenFile = Open vConfig["ghtokenpath"] For Read
+'  If Error Then
+'    Message("GitHub Token not found!")
+'  Else
+'    sGHToken = hTokenFile.ReadLine()
+'    Close #hTokenFile
+'  End If 
+  Try hTokenFile = Open vConfig["dhtokenpath"] For Read
+  If Error Then
+    Message("Docker Token not found!")
   Else
-    sToken = hTokenFile.ReadLine()
+    sDHToken = hTokenFile.ReadLine()
     Close #hTokenFile
   End If 
 
 End
+
+
+
 
 
 
