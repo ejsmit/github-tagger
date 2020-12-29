@@ -27,6 +27,7 @@ jobs:
       run: |
         sudo add-apt-repository universe
         sudo apt update
+        sudo apt search gambas3
         sudo apt install -y gambas3 gambas3-gb-form-print     
     - 
       name: gambas build
