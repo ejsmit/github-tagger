@@ -1,0 +1,31 @@
+# This is a basic workflow that is manually triggered
+
+name: ci-build
+
+# Controls when the action will run. Workflow runs when manually triggered using the UI
+# or API.
+on:
+  push:
+    branches:    
+      - master 
+  pull-request:
+    branches:    
+      - master 
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - 
+      name: checkout current project  
+      uses: actions/checkout@v2
+    - 
+      name: gambas install
+      run: sudo apt install -y gambas3 gambas3-gb-form-print     
+    - 
+      name: gambas build
+      run: /usr/bin/gbc3
+
